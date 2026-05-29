@@ -1,0 +1,12 @@
+pro_profit/linux/
+pro_profit/macos/
+pro_profit/windows/
+pro_profit/ios/
+pro_profit/android/
+pro_profit/web/
+pro_profit/build/
+pro_profit/.dart_tool/
+pro_profit/.idea/
+pro_profit/.idea/
+pro_profit/.dart_tool/
+pro_profit/build/

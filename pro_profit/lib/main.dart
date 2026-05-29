@@ -1,0 +1,132 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'screens/dashboard_screen.dart';
+import 'screens/hpp_calculator_screen.dart';
+import 'screens/sales_input_screen.dart';
+import 'screens/profile_screen.dart';
+
+void main() {
+  runApp(const ProProfitApp());
+}
+
+class ProProfitApp extends StatelessWidget {
+  const ProProfitApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Pro Profit',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: const ColorScheme(
+          brightness: Brightness.light,
+          primary: Color(0xFF000000),
+          onPrimary: Color(0xFFFFFFFF),
+          primaryContainer: Color(0xFF131B2E),
+          onPrimaryContainer: Color(0xFF7C839B),
+          secondary: Color(0xFF006A61),
+          onSecondary: Color(0xFFFFFFFF),
+          secondaryContainer: Color(0xFF86F2E4),
+          onSecondaryContainer: Color(0xFF006F66),
+          tertiary: Color(0xFF000000),
+          onTertiary: Color(0xFFFFFFFF),
+          tertiaryContainer: Color(0xFF002109),
+          onTertiaryContainer: Color(0xFF009844),
+          error: Color(0xFFBA1A1A),
+          onError: Color(0xFFFFFFFF),
+          errorContainer: Color(0xFFFFDAD6),
+          onErrorContainer: Color(0xFF93000A),
+          surface: Color(0xFFF8F9FF),
+          onSurface: Color(0xFF0B1C30),
+          surfaceContainerHighest: Color(0xFFD3E4FE),
+          onSurfaceVariant: Color(0xFF45464D),
+          outline: Color(0xFF76777D),
+          outlineVariant: Color(0xFFC6C6CD),
+        ),
+        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
+        scaffoldBackgroundColor: const Color(0xFFF8F9FF),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF8F9FF),
+          foregroundColor: Color(0xFF000000),
+          elevation: 0,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFFF8F9FF),
+          selectedItemColor: Color(0xFF006A61),
+          unselectedItemColor: Color(0xFF45464D),
+        ),
+      ),
+      home: const MainScreen(),
+    );
+  }
+}
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _selectedIndex = 0;
+
+  static const List<Widget> _widgetOptions = <Widget>[
+    DashboardScreen(),
+    HppCalculatorScreen(),
+    SalesInputScreen(),
+    ProfileScreen(),
+  ];
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _widgetOptions.elementAt(_selectedIndex),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+              width: 1.0,
+            ),
+          ),
+        ),
+        child: BottomNavigationBar(
+          items: const <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard),
+              label: 'Beranda',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calculate_outlined),
+              activeIcon: Icon(Icons.calculate),
+              label: 'HPP',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.add_shopping_cart_outlined),
+              activeIcon: Icon(Icons.add_shopping_cart),
+              label: 'Input',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.account_circle_outlined),
+              activeIcon: Icon(Icons.account_circle),
+              label: 'Profil',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          type: BottomNavigationBarType.fixed,
+        ),
+      ),
+    );
+  }
+}
