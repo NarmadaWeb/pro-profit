@@ -493,7 +493,7 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              Divider(color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.2)),
+              Divider(color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.2)),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
