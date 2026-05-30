@@ -210,7 +210,7 @@ class ProfileScreen extends StatelessWidget {
           Text(
             'Berlaku hingga 12 Des 2024',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.8),
+                  color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8),
                 ),
           ),
           const SizedBox(height: 24),
@@ -218,7 +218,7 @@ class ProfileScreen extends StatelessWidget {
             height: 8,
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
@@ -293,7 +293,7 @@ class ProfileScreen extends StatelessWidget {
               trailing: Switch(
                 value: false,
                 onChanged: (val) {},
-                activeColor: Theme.of(context).colorScheme.primary,
+                activeThumbColor: Theme.of(context).colorScheme.primary,
               ),
             ),
             _buildSettingsItem(

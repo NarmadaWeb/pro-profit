@@ -219,7 +219,7 @@ class _PriceSimulationScreenState extends State<PriceSimulationScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+            color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Theme.of(context).colorScheme.secondaryContainer),
           ),
@@ -261,7 +261,7 @@ class _PriceSimulationScreenState extends State<PriceSimulationScreen> {
                 child: Icon(
                   Icons.calculate,
                   size: 120,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
                 ),
               ),
               Column(

@@ -278,7 +278,7 @@ class _SalesInputScreenState extends State<SalesInputScreen> {
                   filled: true,
                   fillColor: Theme.of(context).colorScheme.surfaceBright,
                 ),
-                value: _selectedMenu,
+                initialValue: _selectedMenu,
                 items: _menuOptions.map((menu) {
                   return DropdownMenuItem<String>(
                     value: menu['name'],
