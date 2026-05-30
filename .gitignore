@@ -1,12 +1,57 @@
-pro_profit/linux/
-pro_profit/macos/
-pro_profit/windows/
-pro_profit/ios/
-pro_profit/android/
-pro_profit/web/
-pro_profit/build/
-pro_profit/.dart_tool/
-pro_profit/.idea/
-pro_profit/.idea/
-pro_profit/.dart_tool/
-pro_profit/build/
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Web build
+build/
+.dart_tool/
+
+# Mac/Linux build
+linux/flutter/ephemeral/
+macos/Flutter/ephemeral/
+windows/flutter/ephemeral/
+
+# Platform folders that shouldn't be large diffs in general if they are created by `flutter create .`
+# (Wait, actually these platform files SHOULD be tracked in git for a standard Flutter app, the large diff is because they are newly added and untracked, but let's just make sure tests run)
