@@ -101,11 +101,14 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Kalkulator HPP',
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Kalkulator HPP',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
@@ -162,7 +165,9 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
                 }
               },
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
