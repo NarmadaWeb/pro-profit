@@ -17,12 +17,55 @@ import 'screens/menu_list_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
-  runApp(const ProProfitApp());
+
+  try {
+    // Load environment variables
+    await dotenv.load(fileName: ".env");
+
+    final url = dotenv.env['SUPABASE_URL'];
+    final anonKey = dotenv.env['SUPABASE_ANON_KEY'];
+
+    if (url == null || anonKey == null || url.isEmpty || anonKey.isEmpty) {
+      throw Exception('SUPABASE_URL atau SUPABASE_ANON_KEY tidak ditemukan di file .env');
+    }
+
+    // Initialize Supabase
+    await Supabase.initialize(
+      url: url,
+      anonKey: anonKey,
+    );
+
+    runApp(const ProProfitApp());
+  } catch (e) {
+    debugPrint('Initialization Error: $e');
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 64),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Gagal Memulai Aplikasi',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Terjadi kesalahan saat konfigurasi Supabase. Pastikan file .env sudah benar.\n\nError: $e',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class ProProfitApp extends StatelessWidget {
