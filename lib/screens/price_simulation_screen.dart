@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_logo.dart';
 
 class PriceSimulationScreen extends StatefulWidget {
   const PriceSimulationScreen({super.key});
@@ -49,26 +50,7 @@ class _PriceSimulationScreenState extends State<PriceSimulationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: const Icon(Icons.coffee, color: Colors.black),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Simulasi Harga Jual',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+        title: const AppLogo(),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront),

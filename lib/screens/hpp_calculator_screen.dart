@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_logo.dart';
 
 class HppCalculatorScreen extends StatefulWidget {
   const HppCalculatorScreen({super.key});
@@ -72,29 +73,15 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: const Icon(Icons.coffee, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Pro Profit',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+        title: const AppLogo(),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront),
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Pilihan Toko akan segera hadir!')),
+              );
+            },
           ),
           const SizedBox(width: 16),
         ],

@@ -1,32 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/app_logo.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: const Icon(Icons.coffee, color: Colors.black),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Pro Profit',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+        title: const AppLogo(),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -85,6 +74,10 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildProfileCard(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final fullName = user?.userMetadata?['full_name'] as String? ?? 'Pemilik Bisnis';
+    final email = user?.email ?? 'Belum ada email';
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -122,15 +115,16 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Kopi Senja Utama',
+            fullName,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
-            'SME Coffee & Eatery',
+            'Pemilik Bisnis',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -160,9 +154,9 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 24),
-          _buildInfoRow(context, Icons.location_on, 'Lokasi Utama', 'Jakarta Selatan, Indonesia'),
+          _buildInfoRow(context, Icons.location_on, 'Lokasi Utama', 'Indonesia'),
           const SizedBox(height: 16),
-          _buildInfoRow(context, Icons.mail, 'Email Bisnis', 'owner@kopisenja.com'),
+          _buildInfoRow(context, Icons.mail, 'Email Bisnis', email),
         ],
       ),
     );
@@ -260,7 +254,11 @@ class ProfileScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Fitur Upgrade Paket akan segera hadir!')),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: Theme.of(context).colorScheme.primary,
@@ -283,12 +281,19 @@ class ProfileScreen extends StatelessWidget {
           title: 'Preferensi Aplikasi',
           icon: Icons.tune,
           children: [
-            _buildSettingsItem(
-              context,
-              icon: Icons.language,
-              title: 'Bahasa',
-              subtitle: 'Bahasa Indonesia',
-              trailing: const Icon(Icons.chevron_right),
+            InkWell(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Pengaturan Bahasa akan segera hadir!')),
+                );
+              },
+              child: _buildSettingsItem(
+                context,
+                icon: Icons.language,
+                title: 'Bahasa',
+                subtitle: 'Bahasa Indonesia',
+                trailing: const Icon(Icons.chevron_right),
+              ),
             ),
             _buildSettingsItem(
               context,
@@ -297,16 +302,27 @@ class ProfileScreen extends StatelessWidget {
               subtitle: 'Ikuti pengaturan sistem',
               trailing: Switch(
                 value: false,
-                onChanged: (val) {},
+                onChanged: (val) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mode Gelap akan segera hadir!')),
+                  );
+                },
                 activeThumbColor: Theme.of(context).colorScheme.primary,
               ),
             ),
-            _buildSettingsItem(
-              context,
-              icon: Icons.payments,
-              title: 'Mata Uang',
-              subtitle: 'IDR (Rp)',
-              trailing: const Icon(Icons.chevron_right),
+            InkWell(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Pengaturan Mata Uang akan segera hadir!')),
+                );
+              },
+              child: _buildSettingsItem(
+                context,
+                icon: Icons.payments,
+                title: 'Mata Uang',
+                subtitle: 'IDR (Rp)',
+                trailing: const Icon(Icons.chevron_right),
+              ),
             ),
           ],
         ),
@@ -316,12 +332,19 @@ class ProfileScreen extends StatelessWidget {
           title: 'Keamanan & Akun',
           icon: Icons.security,
           children: [
-            _buildSettingsItem(
-              context,
-              icon: Icons.lock,
-              title: 'Ubah Kata Sandi',
-              subtitle: 'Terakhir diubah 3 bulan lalu',
-              trailing: const Icon(Icons.chevron_right),
+            InkWell(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Ubah Kata Sandi akan segera hadir!')),
+                );
+              },
+              child: _buildSettingsItem(
+                context,
+                icon: Icons.lock,
+                title: 'Ubah Kata Sandi',
+                subtitle: 'Terakhir diubah 3 bulan lalu',
+                trailing: const Icon(Icons.chevron_right),
+              ),
             ),
             _buildSettingsItem(
               context,
@@ -330,7 +353,11 @@ class ProfileScreen extends StatelessWidget {
               subtitle: 'Belum aktif',
               subtitleColor: Theme.of(context).colorScheme.error,
               trailing: OutlinedButton(
-                onPressed: () {},
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Otentikasi Dua Faktor akan segera hadir!')),
+                  );
+                },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.primary,
                   side: BorderSide(color: Theme.of(context).colorScheme.primary),
@@ -346,7 +373,18 @@ class ProfileScreen extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () async {
+              try {
+                await Supabase.instance.client.auth.signOut();
+                // AuthWrapper will handle the navigation to LoginScreen
+              } catch (error) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Gagal keluar akun. Silakan coba lagi.')),
+                  );
+                }
+              }
+            },
             icon: const Icon(Icons.logout),
             label: const Text('Keluar Akun'),
             style: OutlinedButton.styleFrom(
@@ -361,7 +399,11 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         TextButton(
-          onPressed: () {},
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Fitur Hapus Akun akan segera hadir!')),
+            );
+          },
           style: TextButton.styleFrom(
             foregroundColor: Theme.of(context).colorScheme.error,
           ),

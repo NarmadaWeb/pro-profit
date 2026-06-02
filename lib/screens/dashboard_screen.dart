@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_logo.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -7,35 +8,25 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                shape: BoxShape.circle,
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: const Icon(Icons.coffee, color: Colors.black),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Pro Profit',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+        title: const AppLogo(),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront),
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Pilihan Toko akan segera hadir!')),
+              );
+            },
           ),
           const SizedBox(width: 16),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fitur Tambah Cepat akan segera hadir!')),
+          );
+        },
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
         child: const Icon(Icons.add),
@@ -352,7 +343,11 @@ class DashboardScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Daftar Semua Menu akan segera hadir!')),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -371,7 +366,11 @@ class DashboardScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: InkWell(
-        onTap: () {},
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Detail Menu akan segera hadir!')),
+          );
+        },
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.all(8.0),
