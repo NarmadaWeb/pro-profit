@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_logo.dart';
 
 class HppCalculatorScreen extends StatefulWidget {
@@ -9,17 +10,15 @@ class HppCalculatorScreen extends StatefulWidget {
 }
 
 class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
-  final List<Map<String, dynamic>> _rawMaterials = [
-    {'name': 'Biji Kopi Arabika', 'price': 150000.0, 'qty': 1.0},
-  ];
+  final List<Map<String, dynamic>> _rawMaterials = [];
 
-  double _cupLidCost = 1200.0;
-  double _strawCarrierCost = 300.0;
+  double _cupLidCost = 0.0;
+  double _strawCarrierCost = 0.0;
 
-  double _electricityCost = 500000.0;
-  double _rentCost = 2000000.0;
-  double _salaryCost = 3000000.0;
-  double _monthlyTarget = 1000.0;
+  double _electricityCost = 0.0;
+  double _rentCost = 0.0;
+  double _salaryCost = 0.0;
+  double _monthlyTarget = 1.0;
 
   double _hppPerUnit = 0;
   double _subtotal = 0;
@@ -27,10 +26,84 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
   double _marginPercentage = 30.0;
   double _recommendedPrice = 0;
 
+  String? _tenantId;
+  bool _isLoading = true;
+  final _recipeNameController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
-    _calculateHPP();
+    _fetchInitialData();
+  }
+
+  Future<void> _fetchInitialData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      final profileData = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('id', user.id)
+          .single();
+
+      _tenantId = profileData['tenant_id'];
+      if (_tenantId == null) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/store-selection');
+        }
+        return;
+      }
+
+      // Fetch existing materials and overhead if any
+      final materialsData = await Supabase.instance.client
+          .from('raw_materials')
+          .select()
+          .eq('tenant_id', _tenantId as Object);
+
+      final overheadData = await Supabase.instance.client
+          .from('overhead_costs')
+          .select()
+          .eq('tenant_id', _tenantId as Object);
+
+      setState(() {
+        if (materialsData.isNotEmpty) {
+          _rawMaterials.clear();
+          for (var m in materialsData) {
+            _rawMaterials.add({
+              'id': m['id'],
+              'name': m['name'],
+              'price': (m['price_per_unit'] as num).toDouble(),
+              'qty': 1.0, // default qty for calculation
+            });
+          }
+        } else {
+          _rawMaterials.add({'name': 'Biji Kopi Arabika', 'price': 150000.0, 'qty': 1.0});
+        }
+
+        if (overheadData.isNotEmpty) {
+          for (var o in overheadData) {
+            if (o['name'].toString().toLowerCase().contains('listrik')) {
+              _electricityCost = (o['monthly_amount'] as num).toDouble();
+            } else if (o['name'].toString().toLowerCase().contains('sewa')) {
+              _rentCost = (o['monthly_amount'] as num).toDouble();
+            } else if (o['name'].toString().toLowerCase().contains('gaji')) {
+              _salaryCost = (o['monthly_amount'] as num).toDouble();
+            }
+          }
+        } else {
+          _electricityCost = 500000.0;
+          _rentCost = 2000000.0;
+          _salaryCost = 3000000.0;
+        }
+
+        _isLoading = false;
+        _calculateHPP();
+      });
+    } catch (e) {
+      debugPrint('Error fetching HPP data: $e');
+      setState(() => _isLoading = false);
+    }
   }
 
   void _calculateHPP() {
@@ -53,6 +126,47 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
   void _updateMarginSimulation() {
     if (_marginPercentage >= 100) _marginPercentage = 99.0;
     _recommendedPrice = _hppPerUnit / (1 - (_marginPercentage / 100));
+  }
+
+  Future<void> _saveAsMenu() async {
+    if (_tenantId == null) return;
+    if (_recipeNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Masukkan nama menu terlebih dahulu')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // 1. Insert into recipes
+      await Supabase.instance.client.from('recipes').insert({
+        'tenant_id': _tenantId,
+        'name': _recipeNameController.text.trim(),
+        'category': 'Coffee', // default
+        'selling_price': _recommendedPrice,
+        'target_margin_percent': _marginPercentage,
+        'calculated_hpp': _hppPerUnit,
+      }).select().single();
+
+      // 2. Optional: Save materials as raw_materials if they don't have ID
+      // For simplicity, we just save the recipe for now.
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Menu berhasil disimpan!')),
+        );
+        _recipeNameController.clear();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan menu: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   void _addRawMaterial() {
@@ -78,24 +192,24 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
           IconButton(
             icon: const Icon(Icons.storefront),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Pilihan Toko akan segera hadir!')),
-              );
+              Navigator.pushNamed(context, '/store-selection');
             },
           ),
           const SizedBox(width: 16),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Kalkulator HPP',
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Kalkulator HPP',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
@@ -535,6 +649,42 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     textStyle: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              Text(
+                'SIMPAN SEBAGAI MENU',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      letterSpacing: 2.0,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _recipeNameController,
+                decoration: InputDecoration(
+                  hintText: 'Nama Menu (contoh: Kopi Susu Gula Aren)',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _saveAsMenu,
+                  icon: const Icon(Icons.save),
+                  label: const Text('Simpan Ke Menu'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.secondary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),

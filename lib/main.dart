@@ -12,6 +12,8 @@ import 'screens/profile_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/store_selection_screen.dart';
+import 'screens/menu_list_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,6 +80,8 @@ class ProProfitApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/main': (context) => const MainScreen(),
+        '/store-selection': (context) => const StoreSelectionScreen(),
+        '/menu-list': (context) => const MenuListScreen(),
       },
     );
   }
@@ -142,6 +146,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  bool _isLoading = true;
+  String? _tenantId;
 
   static const List<Widget> _widgetOptions = <Widget>[
     DashboardScreen(),
@@ -149,6 +155,31 @@ class _MainScreenState extends State<MainScreen> {
     SalesInputScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkTenant();
+  }
+
+  Future<void> _checkTenant() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      final profile = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('id', user.id)
+          .single();
+      setState(() {
+        _tenantId = profile['tenant_id'];
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -158,6 +189,32 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_tenantId == null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.storefront, size: 80, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('Anda belum memilih toko'),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacementNamed(context, '/store-selection');
+                },
+                child: const Text('Pilih atau Buat Toko'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: _widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: Container(
