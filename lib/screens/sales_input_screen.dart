@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
+import '../widgets/app_logo.dart';
 
 class SalesInputScreen extends StatefulWidget {
   const SalesInputScreen({super.key});
@@ -9,39 +12,87 @@ class SalesInputScreen extends StatefulWidget {
 
 class _SalesInputScreenState extends State<SalesInputScreen> {
   int _qty = 1;
-  String? _selectedMenu;
-  final List<Map<String, dynamic>> _menuOptions = [
-    {'name': 'Kopi Susu Gula Aren', 'price': 15000},
-    {'name': 'Caramel Macchiato', 'price': 18000},
-    {'name': 'Espresso Double', 'price': 22000},
-    {'name': 'Croissant Plain', 'price': 12000},
-  ];
+  String? _selectedMenuId;
+  List<Map<String, dynamic>> _menuOptions = [];
+  List<Map<String, dynamic>> _salesHistory = [];
+  double _totalOmzet = 0;
+  bool _isLoading = true;
+  String? _tenantId;
 
-  final List<Map<String, dynamic>> _salesHistory = [
-    {
-      'menu': 'Kopi Susu Gula Aren',
-      'note': 'Less Sugar',
-      'qty': 5,
-      'subtotal': 75000,
-      'time': '14:20',
-    },
-    {
-      'menu': 'Caramel Macchiato',
-      'note': '-',
-      'qty': 2,
-      'subtotal': 36000,
-      'time': '13:45',
-    },
-    {
-      'menu': 'Croissant Plain',
-      'note': 'Panaskan',
-      'qty': 10,
-      'subtotal': 120000,
-      'time': '12:10',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
 
-  double _totalOmzet = 2450000;
+  Future<void> _fetchData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // 1. Get tenant_id for the user
+      final profileData = await Supabase.instance.client
+          .from('user_profiles')
+          .select('tenant_id')
+          .eq('id', user.id)
+          .single();
+
+      _tenantId = profileData['tenant_id'];
+      if (_tenantId == null) {
+        throw Exception("Tenant ID not found. User profile may not be set up correctly.");
+      }
+
+      // 2. Fetch recipes (menus)
+      final recipesData = await Supabase.instance.client
+          .from('recipes')
+          .select('id, name, selling_price')
+          .eq('tenant_id', _tenantId as Object);
+
+      setState(() {
+        _menuOptions = List<Map<String, dynamic>>.from(recipesData);
+      });
+
+      // 3. Fetch today's sales history
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day).toIso8601String();
+
+      final salesData = await Supabase.instance.client
+          .from('sales_logs')
+          .select('*, recipes(name)')
+          .eq('tenant_id', _tenantId as Object)
+          .gte('sale_timestamp', startOfDay)
+          .order('sale_timestamp', ascending: false);
+
+      double omzet = 0;
+      final formattedSales = (salesData as List).map((sale) {
+        omzet += sale['subtotal'] ?? 0;
+        final timestamp = DateTime.parse(sale['sale_timestamp']).toLocal();
+        return {
+          'id': sale['id'],
+          'menu': sale['recipes']?['name'] ?? 'Unknown Menu',
+          'note': sale['note'] ?? '-',
+          'qty': sale['quantity'],
+          'subtotal': sale['subtotal'],
+          'time': DateFormat('HH:mm').format(timestamp),
+        };
+      }).toList();
+
+      setState(() {
+        _salesHistory = formattedSales;
+        _totalOmzet = omzet;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error fetching data: $e'), backgroundColor: Colors.red),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _incrementQty() {
     setState(() {
@@ -57,66 +108,73 @@ class _SalesInputScreenState extends State<SalesInputScreen> {
     }
   }
 
-  void _submitSale() {
-    if (_selectedMenu == null) return;
+  Future<void> _submitSale() async {
+    if (_selectedMenuId == null || _tenantId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih menu terlebih dahulu.')),
+      );
+      return;
+    }
 
-    final selected = _menuOptions.firstWhere((element) => element['name'] == _selectedMenu);
-    final int subtotal = selected['price'] * _qty;
+    try {
+      final selected = _menuOptions.firstWhere((element) => element['id'] == _selectedMenuId);
+      final double price = (selected['selling_price'] as num).toDouble();
+      final double subtotal = price * _qty;
 
-    final now = DateTime.now();
-    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
-    setState(() {
-      _salesHistory.insert(0, {
-        'menu': selected['name'],
-        'note': 'Baru saja ditambahkan',
-        'qty': _qty,
+      // Insert into Supabase
+      final response = await Supabase.instance.client.from('sales_logs').insert({
+        'tenant_id': _tenantId,
+        'recipe_id': _selectedMenuId,
+        'quantity': _qty,
         'subtotal': subtotal,
-        'time': timeStr,
-      });
-      _totalOmzet += subtotal;
-      _qty = 1; // reset
-    });
+        'note': 'Input Manual',
+      }).select('*, recipes(name)').single();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 8),
-            Text('Berhasil Disimpan'),
-          ],
-        ),
-        backgroundColor: Color(0xFF006A61), // secondary
-        duration: Duration(seconds: 2),
-      ),
-    );
+      final timestamp = DateTime.parse(response['sale_timestamp']).toLocal();
+
+      setState(() {
+        _salesHistory.insert(0, {
+          'id': response['id'],
+          'menu': response['recipes']?['name'] ?? 'Unknown Menu',
+          'note': response['note'] ?? '-',
+          'qty': response['quantity'],
+          'subtotal': response['subtotal'],
+          'time': DateFormat('HH:mm').format(timestamp),
+        });
+        _totalOmzet += subtotal;
+        _qty = 1; // reset
+        _selectedMenuId = null; // reset dropdown
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Berhasil Disimpan'),
+              ],
+            ),
+            backgroundColor: Color(0xFF006A61), // secondary
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving sale: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: const Icon(Icons.coffee, color: Colors.black),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Pro Profit',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
+        title: const AppLogo(),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront),
@@ -273,30 +331,32 @@ class _SalesInputScreenState extends State<SalesInputScreen> {
                     ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceBright,
-                ),
-                initialValue: _selectedMenu,
-                items: _menuOptions.map((menu) {
-                  return DropdownMenuItem<String>(
-                    value: menu['name'],
-                    child: Text('${menu['name']} - Rp ${menu['price']}'),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  setState(() {
-                    _selectedMenu = val;
-                  });
-                },
-                hint: const Text('Pilih Menu'),
-              ),
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        filled: true,
+                        fillColor: Theme.of(context).colorScheme.surfaceBright,
+                      ),
+                      initialValue: _selectedMenuId,
+                      items: _menuOptions.map((menu) {
+                        return DropdownMenuItem<String>(
+                          value: menu['id'].toString(),
+                          child: Text('${menu['name']} - Rp ${menu['selling_price']}'),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedMenuId = val;
+                        });
+                      },
+                      hint: const Text('Pilih Menu'),
+                    ),
               const SizedBox(height: 24),
               Text(
                 'JUMLAH TERJUAL',
@@ -407,7 +467,7 @@ class _SalesInputScreenState extends State<SalesInputScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Hari ini: 24 Oktober 2023',
+                      'Hari ini: ${DateFormat('dd MMMM yyyy').format(DateTime.now())}',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: Theme.of(context).colorScheme.outline,
                           ),

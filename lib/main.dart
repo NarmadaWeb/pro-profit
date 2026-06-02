@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,12 +9,15 @@ import 'screens/dashboard_screen.dart';
 import 'screens/hpp_calculator_screen.dart';
 import 'screens/sales_input_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await Supabase.initialize(
-    url: 'https://pbnqbgauubggsicavvuw.supabase.co',
-    anonKey: 'sb_publishable_t0FEzhWxMllAKBpVUkZyeQ_Ks0NUQEA',
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
   runApp(const ProProfitApp());
 }
@@ -65,8 +70,64 @@ class ProProfitApp extends StatelessWidget {
           unselectedItemColor: Color(0xFF45464D),
         ),
       ),
-      home: const MainScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const AuthWrapper(),
+        '/login': (context) => const LoginScreen(),
+        '/register': (context) => const RegisterScreen(),
+        '/main': (context) => const MainScreen(),
+      },
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _isAuthenticated = false;
+  late final StreamSubscription<AuthState> _authStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _isAuthenticated = Supabase.instance.client.auth.currentSession != null;
+
+    _authStateSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.signedIn) {
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = true;
+          });
+        }
+      } else if (event == AuthChangeEvent.signedOut) {
+        if (mounted) {
+          setState(() {
+            _isAuthenticated = false;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isAuthenticated) {
+      return const MainScreen();
+    } else {
+      return const LoginScreen();
+    }
   }
 }
 
