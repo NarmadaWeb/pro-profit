@@ -42,11 +42,14 @@ class DashboardScreen extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Halo, Pemilik Toko',
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Halo, Pemilik Toko',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
@@ -64,8 +67,10 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 24),
             _buildTrenOmzet(context),
             const SizedBox(height: 24),
-            _buildTopMenu(context),
-          ],
+                _buildTopMenu(context),
+              ],
+            ),
+          ),
         ),
       ),
     );
