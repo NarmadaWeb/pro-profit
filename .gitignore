@@ -48,7 +48,6 @@ app.*.map.json
 build/
 
 # Environment Variables
-.env
 .dart_tool/
 
 # Mac/Linux build
