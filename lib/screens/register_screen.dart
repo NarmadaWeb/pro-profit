@@ -40,18 +40,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       } on AuthException catch (error) {
         if (mounted) {
+          String message = error.message;
+          if (message.contains('User already registered')) {
+            message = 'Email sudah terdaftar';
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(error.message),
+              content: Text(message),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
       } catch (error) {
         if (mounted) {
+          String message = 'Terjadi kesalahan yang tidak terduga';
+          if (error.toString().contains('SocketException') || error.toString().contains('Failed host lookup')) {
+            message = 'Koneksi internet bermasalah. Silakan periksa koneksi Anda.';
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Terjadi kesalahan yang tidak terduga'),
+              content: Text(message),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
