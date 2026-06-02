@@ -111,6 +111,7 @@ CREATE TABLE public.sales_logs (
     recipe_id UUID REFERENCES public.recipes(id) ON DELETE SET NULL,
     quantity INTEGER NOT NULL DEFAULT 1,
     subtotal NUMERIC NOT NULL DEFAULT 0,
+    note TEXT DEFAULT 'Input Manual',
     sale_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
