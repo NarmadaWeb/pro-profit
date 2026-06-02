@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'screens/dashboard_screen.dart';
 import 'screens/hpp_calculator_screen.dart';
 import 'screens/sales_input_screen.dart';
 import 'screens/profile_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://pbnqbgauubggsicavvuw.supabase.co',
+    anonKey: 'sb_publishable_t0FEzhWxMllAKBpVUkZyeQ_Ks0NUQEA',
+  );
   runApp(const ProProfitApp());
 }
 
