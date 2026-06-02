@@ -1,23 +1,21 @@
 # Panduan Setup Lengkap Supabase - Pro Profit
 
-Dokumen ini menyediakan instruksi mendetail untuk mengonfigurasi backend Supabase, termasuk database, autentikasi, dan storage agar aplikasi Pro Profit dapat berjalan dengan lancar.
+Dokumen ini berisi instruksi lengkap untuk membersihkan dan menyiapkan ulang database Supabase Anda agar fitur **Multi-Tenancy** berjalan dengan benar tanpa error Row Level Security (RLS).
 
 ---
 
 ## 1. Cleanup & Reset (Hapus Semua)
 
-Gunakan script ini di **SQL Editor** jika Anda ingin memulai dari awal atau membersihkan tabel yang error.
+Jalankan script ini di **SQL Editor** Supabase untuk menghapus semua pengaturan lama yang mungkin menyebabkan konflik.
 
 ```sql
--- 1. Hapus Trigger
+-- 1. Hapus Trigger & Fungsi
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
--- 2. Hapus Fungsi (CASCADE menghapus kebijakan terkait)
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 DROP FUNCTION IF EXISTS public.get_my_tenant_id() CASCADE;
 DROP FUNCTION IF EXISTS public.get_user_tenant_id() CASCADE;
 
--- 3. Hapus Tabel
+-- 2. Hapus Tabel
 DROP TABLE IF EXISTS public.sales_logs;
 DROP TABLE IF EXISTS public.recipe_ingredients;
 DROP TABLE IF EXISTS public.recipes;
@@ -26,19 +24,23 @@ DROP TABLE IF EXISTS public.assets;
 DROP TABLE IF EXISTS public.raw_materials;
 DROP TABLE IF EXISTS public.user_profiles;
 DROP TABLE IF EXISTS public.tenants;
+
+-- 3. (Opsional) Hapus Ekstensi
+-- DROP EXTENSION IF EXISTS "uuid-ossp";
 ```
 
 ---
 
-## 2. Setup Database & Multi-Tenancy
+## 2. Setup Database & Multi-Tenancy (Lengkap)
 
-Jalankan script ini di **SQL Editor**. Perhatikan bagian **Policy** yang memungkinkan pengguna melihat daftar toko yang tersedia.
+Jalankan script ini secara keseluruhan di **SQL Editor**. Script ini mencakup pembuatan tabel dan kebijakan keamanan (RLS) yang sudah diperbaiki agar Anda bisa membuat toko tanpa error.
 
 ```sql
--- EKSTENSI
+-- ==========================================
+-- 1. PERSIAPAN & TABEL
+-- ==========================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- TABEL UTAMA
 CREATE TABLE public.tenants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
@@ -112,7 +114,11 @@ CREATE TABLE public.sales_logs (
     sale_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- FUNGSI & TRIGGER
+-- ==========================================
+-- 2. FUNGSI & TRIGGER
+-- ==========================================
+
+-- Trigger saat user baru mendaftar
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -126,12 +132,17 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
+-- Fungsi Helper Tenant (PENTING untuk RLS)
 CREATE OR REPLACE FUNCTION get_my_tenant_id()
 RETURNS UUID AS $$
   SELECT tenant_id FROM public.user_profiles WHERE id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER;
 
--- ROW LEVEL SECURITY (RLS)
+-- ==========================================
+-- 3. KEAMANAN (ROW LEVEL SECURITY)
+-- ==========================================
+
+-- Aktifkan RLS di semua tabel
 ALTER TABLE public.tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.raw_materials ENABLE ROW LEVEL SECURITY;
@@ -141,54 +152,56 @@ ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.recipe_ingredients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales_logs ENABLE ROW LEVEL SECURITY;
 
--- Polisi Spesifik: Agar user bisa melihat daftar toko saat memilih toko
-CREATE POLICY "Allow view all tenants" ON public.tenants FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow create tenant" ON public.tenants FOR INSERT TO authenticated WITH CHECK (true);
+-- BERSIHKAN POLISI LAMA (Jika ada)
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public')
+    LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename);
+    END LOOP;
+END $$;
 
-CREATE POLICY "View own profile" ON public.user_profiles FOR SELECT USING (id = auth.uid());
-CREATE POLICY "Update own profile" ON public.user_profiles FOR UPDATE USING (id = auth.uid());
+-- POLISI BARU (DIPERBAIKI)
 
--- Isolasi Tenant (Gunakan Helper Function)
-CREATE POLICY "Tenant Isolation" ON public.raw_materials FOR ALL USING (tenant_id = get_my_tenant_id());
-CREATE POLICY "Tenant Isolation" ON public.assets FOR ALL USING (tenant_id = get_my_tenant_id());
-CREATE POLICY "Tenant Isolation" ON public.overhead_costs FOR ALL USING (tenant_id = get_my_tenant_id());
-CREATE POLICY "Tenant Isolation" ON public.recipes FOR ALL USING (tenant_id = get_my_tenant_id());
-CREATE POLICY "Tenant Isolation" ON public.sales_logs FOR ALL USING (tenant_id = get_my_tenant_id());
-CREATE POLICY "Ingredient Isolation" ON public.recipe_ingredients FOR ALL USING (
+-- 1. Tenants: Izinkan user buat toko & lihat daftar toko
+CREATE POLICY "Tenants - Select" ON public.tenants FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Tenants - Insert" ON public.tenants FOR INSERT TO authenticated WITH CHECK (true);
+
+-- 2. User Profiles: Izinkan user kelola profil sendiri
+CREATE POLICY "Profiles - Select" ON public.user_profiles FOR SELECT TO authenticated USING (id = auth.uid());
+CREATE POLICY "Profiles - Update" ON public.user_profiles FOR UPDATE TO authenticated USING (id = auth.uid());
+
+-- 3. Isolasi Tenant (Isolasi data antar toko)
+-- Tabel dengan kolom tenant_id
+CREATE POLICY "RLS - Raw Materials" ON public.raw_materials FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+CREATE POLICY "RLS - Assets" ON public.assets FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+CREATE POLICY "RLS - Overhead" ON public.overhead_costs FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+CREATE POLICY "RLS - Recipes" ON public.recipes FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+CREATE POLICY "RLS - Sales Logs" ON public.sales_logs FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+
+-- 4. Recipe Ingredients (Isolasi berdasarkan resep milik tenant)
+CREATE POLICY "RLS - Ingredients" ON public.recipe_ingredients FOR ALL TO authenticated USING (
     recipe_id IN (SELECT id FROM public.recipes WHERE tenant_id = get_my_tenant_id())
 );
 ```
 
 ---
 
-## 3. Setup Storage (Foto Profil)
+## 3. Setup Storage (Bucket: avatars)
 
-1.  Buka menu **Storage** di dashboard Supabase.
-2.  Klik **New Bucket**.
-3.  Beri nama: `avatars`.
-4.  Centang **Public bucket**.
-5.  Klik **Save**.
-6.  Buka tab **Policies** untuk bucket `avatars`.
-7.  Tambahkan kebijakan (New Policy):
-    *   **Select**: Pilih "Get Started quickly" -> "Give access to everyone".
-    *   **Insert/Update**: Pilih "Give access to authenticated users" -> Pastikan kolom `owner` sesuai dengan `auth.uid()`.
+1.  Buka menu **Storage**.
+2.  Buat bucket baru: `avatars`.
+3.  Set sebagai **Public**.
+4.  Di tab **Policies** untuk bucket `avatars`:
+    *   **Select**: Izinkan untuk semua (Public).
+    *   **Insert/Update**: Izinkan hanya untuk user terautentikasi.
 
 ---
 
-## 4. Konfigurasi File `.env`
+## 4. Tips Troubleshooting
 
-File `.env` harus berada di root folder project.
-
-```env
-SUPABASE_URL=https://xyz.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1Ni...
-```
-
----
-
-## 5. Troubleshooting (Masalah Umum)
-
-*   **Aplikasi Stale/Hanya Loading**: Pastikan koneksi internet stabil dan kunci di `.env` sudah benar tanpa tanda kutip.
-*   **Daftar Toko Kosong**: Jalankan script RLS di bagian `tenants` (Poin 2) agar `authenticated` user bisa melihat daftar toko.
-*   **Error "Permission Denied"**: Pastikan Anda sudah menjalankan `ENABLE ROW LEVEL SECURITY` pada setiap tabel.
-*   **Gagal Upload Foto**: Pastikan bucket `avatars` sudah dibuat dan diset sebagai **Public**.
+*   **Error "New row violates RLS"**: Pastikan Anda sudah menjalankan script di Poin 2 secara lengkap, terutama bagian polisi `Tenants - Insert`.
+*   **Daftar Toko Tidak Muncul**: Pastikan tabel `tenants` sudah memiliki polisi `Tenants - Select`.
+*   **Gagal Login/Daftar**: Periksa file `.env` di root folder project Anda. Pastikan URL dan Key sudah benar.
