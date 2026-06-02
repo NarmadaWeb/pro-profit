@@ -10,6 +10,71 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final _supabase = Supabase.instance.client;
+  final _nameController = TextEditingController();
+  final _photoUrlController = TextEditingController();
+  bool _isLoading = true;
+  String? _photoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      final data = await _supabase
+          .from('user_profiles')
+          .select()
+          .eq('id', user.id)
+          .single();
+
+      setState(() {
+        _nameController.text = data['full_name'] ?? '';
+        _photoUrl = data['photo_url']; // Assuming this field might exist or be added
+        _photoUrlController.text = _photoUrl ?? '';
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching profile: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      await _supabase.from('user_profiles').update({
+        'full_name': _nameController.text.trim(),
+        'photo_url': _photoUrlController.text.trim(),
+      }).eq('id', user.id);
+
+      setState(() {
+        _photoUrl = _photoUrlController.text.trim();
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profil berhasil diperbarui!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memperbarui profil: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,48 +83,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const AppLogo(),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {},
+            icon: const Icon(Icons.storefront),
+            onPressed: () {
+              Navigator.pushNamed(context, '/store-selection');
+            },
           ),
           const SizedBox(width: 16),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth > 800) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: _buildBusinessInfoColumn(context),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.maxWidth > 800) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: _buildBusinessInfoColumn(context),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              flex: 7,
+                              child: _buildSettingsColumn(context),
+                            ),
+                          ],
+                        );
+                      } else {
+                        return Column(
+                          children: [
+                            _buildBusinessInfoColumn(context),
+                            const SizedBox(height: 24),
+                            _buildSettingsColumn(context),
+                          ],
+                        );
+                      }
+                    },
                   ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    flex: 7,
-                    child: _buildSettingsColumn(context),
-                  ),
-                ],
-              );
-            } else {
-              return Column(
-                children: [
-                  _buildBusinessInfoColumn(context),
-                  const SizedBox(height: 24),
-                  _buildSettingsColumn(context),
-                ],
-              );
-            }
-          },
-        ),
-          ),
-        ),
-      ),
+                ),
+              ),
+            ),
     );
   }
 
@@ -68,15 +137,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         _buildProfileCard(context),
         const SizedBox(height: 24),
-        _buildSubscriptionCard(context),
+        _buildEditProfileCard(context),
       ],
     );
   }
 
   Widget _buildProfileCard(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final fullName = user?.userMetadata?['full_name'] as String? ?? 'Pemilik Bisnis';
+    final user = _supabase.auth.currentUser;
     final email = user?.email ?? 'Belum ada email';
+    final fullName = _nameController.text.isEmpty ? 'Pemilik Bisnis' : _nameController.text;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -87,31 +156,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
-          Stack(
-            children: [
-              Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
-                ),
-                child: const Icon(Icons.store, size: 48),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.edit, size: 16, color: Theme.of(context).colorScheme.onPrimary),
-                ),
-              ),
-            ],
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              shape: BoxShape.circle,
+              border: Border.all(color: Theme.of(context).colorScheme.primary, width: 2),
+              image: _photoUrl != null && _photoUrl!.isNotEmpty
+                  ? DecorationImage(image: NetworkImage(_photoUrl!), fit: BoxFit.cover)
+                  : null,
+            ),
+            child: _photoUrl == null || _photoUrl!.isEmpty
+                ? const Icon(Icons.store, size: 48)
+                : null,
           ),
           const SizedBox(height: 16),
           Text(
@@ -129,34 +187,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6BFF8F), // tertiary-fixed
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.verified, size: 14, color: Color(0xFF002109)), // on-tertiary-fixed
-                const SizedBox(width: 4),
-                Text(
-                  'Subscription Plan: Premium',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF002109), // on-tertiary-fixed
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 24),
           const Divider(),
           const SizedBox(height: 24),
           _buildInfoRow(context, Icons.location_on, 'Lokasi Utama', 'Indonesia'),
           const SizedBox(height: 16),
           _buildInfoRow(context, Icons.mail, 'Email Bisnis', email),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditProfileCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Edit Profil',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 24),
+          TextFormField(
+            controller: _nameController,
+            decoration: const InputDecoration(
+              labelText: 'Nama Lengkap',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.person),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _photoUrlController,
+            decoration: const InputDecoration(
+              labelText: 'URL Foto Profil',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.image),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _updateProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: const Text('Simpan Perubahan'),
+            ),
+          ),
         ],
       ),
     );
@@ -185,91 +274,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildSubscriptionCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Status Langganan',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Berlaku hingga 12 Des 2024',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.8),
-                ),
-          ),
-          const SizedBox(height: 24),
-          Container(
-            height: 8,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 200, // mock width
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6BFF8F), // tertiary-fixed
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Penyimpanan Data',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-              ),
-              Text(
-                '8.2 GB / 10 GB',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Fitur Upgrade Paket akan segera hadir!')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Theme.of(context).colorScheme.primary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('Upgrade Paket', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -322,49 +326,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: 'Mata Uang',
                 subtitle: 'IDR (Rp)',
                 trailing: const Icon(Icons.chevron_right),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        _buildSettingsSection(
-          context,
-          title: 'Keamanan & Akun',
-          icon: Icons.security,
-          children: [
-            InkWell(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Ubah Kata Sandi akan segera hadir!')),
-                );
-              },
-              child: _buildSettingsItem(
-                context,
-                icon: Icons.lock,
-                title: 'Ubah Kata Sandi',
-                subtitle: 'Terakhir diubah 3 bulan lalu',
-                trailing: const Icon(Icons.chevron_right),
-              ),
-            ),
-            _buildSettingsItem(
-              context,
-              icon: Icons.admin_panel_settings,
-              title: 'Otentikasi Dua Faktor',
-              subtitle: 'Belum aktif',
-              subtitleColor: Theme.of(context).colorScheme.error,
-              trailing: OutlinedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Otentikasi Dua Faktor akan segera hadir!')),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                  side: BorderSide(color: Theme.of(context).colorScheme.primary),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('Aktifkan'),
               ),
             ),
           ],

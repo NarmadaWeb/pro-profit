@@ -39,7 +39,16 @@ class _SalesInputScreenState extends State<SalesInputScreen> {
 
       _tenantId = profileData['tenant_id'];
       if (_tenantId == null) {
-        throw Exception("Tenant ID not found. User profile may not be set up correctly.");
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Silakan pilih toko terlebih dahulu.')),
+          );
+          Navigator.pushReplacementNamed(context, '/store-selection');
+        }
+        return;
       }
 
       // 2. Fetch recipes (menus)
@@ -178,7 +187,9 @@ class _SalesInputScreenState extends State<SalesInputScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.pushNamed(context, '/store-selection');
+            },
           ),
           const SizedBox(width: 16),
         ],

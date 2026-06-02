@@ -1,11 +1,138 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart';
 import '../widgets/app_logo.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _supabase = Supabase.instance.client;
+  bool _isLoading = true;
+  double _totalOmzet = 0;
+  double _labaBersih = 0;
+  double _avgHpp = 0;
+  List<Map<String, dynamic>> _dailyOmzet = [];
+  List<Map<String, dynamic>> _topMenus = [];
+  String? _tenantId;
+  String _userName = 'Pemilik Toko';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDashboardData();
+  }
+
+  Future<void> _fetchDashboardData() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      final profileData = await _supabase
+          .from('user_profiles')
+          .select('tenant_id, full_name')
+          .eq('id', user.id)
+          .single();
+
+      _tenantId = profileData['tenant_id'];
+      _userName = profileData['full_name'] ?? 'Pemilik Toko';
+
+      if (_tenantId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 1. Fetch Sales Logs for metrics and trend
+      final salesData = await _supabase
+          .from('sales_logs')
+          .select('subtotal, sale_timestamp')
+          .eq('tenant_id', _tenantId as Object);
+
+      double totalOmzet = 0;
+      Map<String, double> dailyMap = {};
+
+      // Initialize last 7 days
+      for (int i = 6; i >= 0; i--) {
+        final date = DateTime.now().subtract(Duration(days: i));
+        final label = DateFormat('EEE').format(date);
+        dailyMap[label] = 0;
+      }
+
+      for (var sale in salesData) {
+        final double subtotal = (sale['subtotal'] as num).toDouble();
+        totalOmzet += subtotal;
+
+        final timestamp = DateTime.parse(sale['sale_timestamp']).toLocal();
+        final label = DateFormat('EEE').format(timestamp);
+        if (dailyMap.containsKey(label)) {
+          dailyMap[label] = (dailyMap[label] ?? 0) + subtotal;
+        }
+      }
+
+      _dailyOmzet = dailyMap.entries.map((e) => {'label': e.key, 'value': e.value}).toList();
+
+      // 2. Fetch Recipes for HPP and Laba calculation
+      final recipesData = await _supabase
+          .from('recipes')
+          .select('calculated_hpp, selling_price, target_margin_percent, name')
+          .eq('tenant_id', _tenantId as Object);
+
+      double totalHpp = 0;
+      if (recipesData.isNotEmpty) {
+        for (var recipe in recipesData) {
+          totalHpp += (recipe['calculated_hpp'] as num).toDouble();
+        }
+        _avgHpp = (totalHpp / recipesData.length) / 100; // Simplified for display as % if needed, or keep as value
+        // Let's use the average margin instead
+        double totalMarginPercent = 0;
+        for (var recipe in recipesData) {
+           totalMarginPercent += (recipe['target_margin_percent'] as num).toDouble();
+        }
+        _avgHpp = totalMarginPercent / recipesData.length;
+      }
+
+      _totalOmzet = totalOmzet;
+      // Rough estimation of Laba Bersih
+      _labaBersih = totalOmzet * (_avgHpp / 100);
+
+      // 3. Top Menus (by margin)
+      final topMenusData = await _supabase
+          .from('recipes')
+          .select('name, target_margin_percent')
+          .eq('tenant_id', _tenantId as Object)
+          .order('target_margin_percent', ascending: false)
+          .limit(3);
+
+      _topMenus = List<Map<String, dynamic>>.from(topMenusData);
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching dashboard data: $e');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  String _formatCurrency(double value) {
+    if (value >= 1000000) {
+      return 'Rp ${(value / 1000000).toStringAsFixed(1)}Jt';
+    } else if (value >= 1000) {
+      return 'Rp ${(value / 1000).toStringAsFixed(1)}Rb';
+    }
+    return 'Rp ${value.toStringAsFixed(0)}';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const AppLogo(),
@@ -13,9 +140,7 @@ class DashboardScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.storefront),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Pilihan Toko akan segera hadir!')),
-              );
+              Navigator.pushNamed(context, '/store-selection');
             },
           ),
           const SizedBox(width: 16),
@@ -40,7 +165,7 @@ class DashboardScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Halo, Pemilik Toko',
+                  'Halo, $_userName',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
@@ -83,9 +208,9 @@ class DashboardScreen extends StatelessWidget {
                 title: 'OMZET TOTAL',
                 icon: Icons.payments,
                 iconColor: Theme.of(context).colorScheme.primary,
-                value: 'Rp 42.5M',
+                value: _formatCurrency(_totalOmzet),
                 changeIcon: Icons.trending_up,
-                changeText: '+12% dari minggu lalu',
+                changeText: 'Total akumulasi',
                 changeColor: Theme.of(context).colorScheme.secondary,
                 isDark: false,
               ),
@@ -96,12 +221,12 @@ class DashboardScreen extends StatelessWidget {
                   : constraints.maxWidth,
               child: _buildMetricCard(
                 context,
-                title: 'LABA BERSIH',
+                title: 'ESTIMASI LABA',
                 icon: Icons.account_balance_wallet,
                 iconColor: const Color(0xFF6BD8CB), // secondary-fixed-dim
-                value: 'Rp 18.2M',
+                value: _formatCurrency(_labaBersih),
                 changeIcon: Icons.verified,
-                changeText: 'Margin Sehat (42.8%)',
+                changeText: 'Berdasarkan margin',
                 changeColor: const Color(0xFF4AE176), // tertiary-fixed-dim
                 isDark: true,
               ),
@@ -112,12 +237,12 @@ class DashboardScreen extends StatelessWidget {
                   : constraints.maxWidth,
               child: _buildMetricCard(
                 context,
-                title: 'HPP RATA-RATA',
+                title: 'MARGIN RATA-RATA',
                 icon: Icons.inventory_2,
                 iconColor: Theme.of(context).colorScheme.error,
-                value: '28.4%',
+                value: '${_avgHpp.toStringAsFixed(1)}%',
                 changeIcon: Icons.info,
-                changeText: 'Turun 1.2% bulan ini',
+                changeText: 'Dari semua menu',
                 changeColor: Theme.of(context).colorScheme.onSurfaceVariant,
                 isDark: false,
               ),
@@ -207,6 +332,12 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildTrenOmzet(BuildContext context) {
+    double maxVal = 0;
+    for (var d in _dailyOmzet) {
+      if ((d['value'] as double) > maxVal) maxVal = d['value'];
+    }
+    if (maxVal == 0) maxVal = 1;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -258,19 +389,20 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(height: 24),
           SizedBox(
             height: 200,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildBar(context, 'Sen', 0.6, false),
-                _buildBar(context, 'Sel', 0.85, false),
-                _buildBar(context, 'Rab', 0.45, false),
-                _buildBar(context, 'Kam', 1.0, false),
-                _buildBar(context, 'Jum', 0.75, false),
-                _buildBar(context, 'Sab', 0.9, true),
-                _buildBar(context, 'Min', 0.65, false),
-              ],
-            ),
+            child: _dailyOmzet.isEmpty
+                ? const Center(child: Text('Belum ada data penjualan.'))
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: _dailyOmzet.map((d) {
+                      return _buildBar(
+                        context,
+                        d['label'],
+                        (d['value'] as double) / maxVal,
+                        d['label'] == DateFormat('EEE').format(DateTime.now()),
+                      );
+                    }).toList(),
+                  ),
           ),
         ],
       ),
@@ -336,17 +468,24 @@ class DashboardScreen extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 16),
-          _buildMenuItem(context, 'Espresso Tonic', 'Margin 72%', Icons.local_cafe),
-          _buildMenuItem(context, 'Matcha Latte', 'Margin 68%', Icons.emoji_food_beverage),
-          _buildMenuItem(context, 'Cold Brew', 'Margin 65%', Icons.coffee_maker),
+          if (_topMenus.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Text('Belum ada data menu.'),
+            )
+          else
+            ..._topMenus.map((m) => _buildMenuItem(
+                context,
+                m['name'],
+                'Margin ${m['target_margin_percent']}%',
+                Icons.restaurant_menu,
+              )),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Daftar Semua Menu akan segera hadir!')),
-                );
+                Navigator.pushNamed(context, '/menu-list');
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
