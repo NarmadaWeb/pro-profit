@@ -19,6 +19,8 @@ DROP FUNCTION IF EXISTS public.get_user_tenant_id() CASCADE;
 DROP TABLE IF EXISTS public.sales_logs;
 DROP TABLE IF EXISTS public.recipe_ingredients;
 DROP TABLE IF EXISTS public.recipes;
+DROP TABLE IF EXISTS public.hpp_calculations;
+DROP TABLE IF EXISTS public.utility_rates;
 DROP TABLE IF EXISTS public.overhead_costs;
 DROP TABLE IF EXISTS public.assets;
 DROP TABLE IF EXISTS public.raw_materials;
@@ -115,6 +117,30 @@ CREATE TABLE public.sales_logs (
     sale_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE public.utility_rates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    rate NUMERIC NOT NULL DEFAULT 0,
+    unit TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE public.hpp_calculations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+    product_name TEXT NOT NULL,
+    batch_size NUMERIC NOT NULL DEFAULT 1,
+    production_time_hours NUMERIC NOT NULL DEFAULT 0,
+    raw_material_cost NUMERIC NOT NULL DEFAULT 0,
+    labor_cost NUMERIC NOT NULL DEFAULT 0,
+    overhead_cost NUMERIC NOT NULL DEFAULT 0,
+    total_hpp NUMERIC NOT NULL DEFAULT 0,
+    hpp_per_unit NUMERIC NOT NULL DEFAULT 0,
+    details JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ==========================================
 -- 2. FUNGSI & TRIGGER
 -- ==========================================
@@ -152,6 +178,8 @@ ALTER TABLE public.overhead_costs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.recipe_ingredients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.utility_rates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.hpp_calculations ENABLE ROW LEVEL SECURITY;
 
 -- BERSIHKAN POLISI LAMA (Jika ada)
 DO $$
@@ -181,6 +209,8 @@ CREATE POLICY "RLS - Assets" ON public.assets FOR ALL TO authenticated USING (te
 CREATE POLICY "RLS - Overhead" ON public.overhead_costs FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
 CREATE POLICY "RLS - Recipes" ON public.recipes FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
 CREATE POLICY "RLS - Sales Logs" ON public.sales_logs FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+CREATE POLICY "RLS - Utility Rates" ON public.utility_rates FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
+CREATE POLICY "RLS - HPP Calculations" ON public.hpp_calculations FOR ALL TO authenticated USING (tenant_id = get_my_tenant_id());
 
 -- 4. Recipe Ingredients (Isolasi berdasarkan resep milik tenant)
 CREATE POLICY "RLS - Ingredients" ON public.recipe_ingredients FOR ALL TO authenticated USING (
