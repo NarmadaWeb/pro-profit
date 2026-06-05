@@ -127,6 +127,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return 'Rp ${value.toStringAsFixed(0)}';
   }
 
+  void _showQuickAddSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 20,
+            left: 20,
+            right: 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Tambah Cepat',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.calculate)),
+                title: const Text('Mulai Hitung HPP Baru'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Since MainScreen handles index, we need a way to switch tabs.
+                  // For now, let's just push to a separate screen if needed or inform user.
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Pindah ke tab HPP untuk mulai menghitung.')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.add_shopping_cart)),
+                title: const Text('Input Penjualan Baru'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Pindah ke tab Input untuk mencatat penjualan.')),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.inventory_2)),
+                title: const Text('Tambah Bahan Baku'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/raw-materials');
+                },
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -147,11 +217,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Fitur Tambah Cepat akan segera hadir!')),
-          );
-        },
+        onPressed: () => _showQuickAddSheet(context),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
         child: const Icon(Icons.add),
@@ -506,9 +572,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: InkWell(
         onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Detail Menu akan segera hadir!')),
-          );
+          Navigator.pushNamed(context, '/menu-list');
         },
         borderRadius: BorderRadius.circular(8),
         child: Padding(

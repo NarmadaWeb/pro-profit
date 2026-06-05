@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
 import '../widgets/app_logo.dart';
 
 class HppCalculatorScreen extends StatefulWidget {
@@ -115,21 +119,281 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
     });
   }
 
+  void _showInitialPurchaseModal() {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final qtyController = TextEditingController();
+    final noteController = TextEditingController();
+    String selectedUnit = 'gram';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              title: const Text('Input Bahan Baru', style: TextStyle(fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTextField(
+                      label: 'Nama Bahan',
+                      hint: 'Biji Kopi',
+                      controller: nameController,
+                      icon: Icons.inventory_2,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      label: 'Harga Beli (Awal)',
+                      hint: '100000',
+                      controller: priceController,
+                      icon: Icons.payments,
+                      prefixText: 'Rp ',
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTextField(
+                            label: 'Jumlah Beli',
+                            hint: '1',
+                            controller: qtyController,
+                            icon: Icons.shopping_cart,
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Satuan', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                initialValue: selectedUnit,
+                                isDense: true,
+                                decoration: InputDecoration(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                items: ['Kg', 'ml', 'gram', 'pcs', 'ons', 'L']
+                                    .map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 12))))
+                                    .toList(),
+                                onChanged: (val) => setModalState(() => selectedUnit = val!),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      label: 'Keterangan Tambahan',
+                      hint: 'Beli di Toko Maju',
+                      controller: noteController,
+                      icon: Icons.note,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                ElevatedButton(
+                  onPressed: () {
+                    if (nameController.text.isEmpty) return;
+                    setState(() {
+                      _rawMaterials.add({
+                        'name': nameController.text,
+                        'purchase_price': double.tryParse(priceController.text) ?? 0.0,
+                        'purchase_qty': double.tryParse(qtyController.text) ?? 1.0,
+                        'purchase_unit': selectedUnit,
+                        'purchase_note': noteController.text,
+                        'usage_qty': 0.0,
+                        'usage_unit': selectedUnit,
+                        'usage_note': '',
+                        'subtotal': 0.0,
+                      });
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Tambah'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _addRawMaterial() {
-    setState(() {
-      _rawMaterials.add({
-        'name': '',
-        'qty': 1.0,
-        'price': 0.0,
-        'subtotal': 0.0,
-      });
-    });
+    _showInitialPurchaseModal();
   }
 
   void _removeRawMaterial(int index) {
     setState(() {
       _rawMaterials.removeAt(index);
     });
+  }
+
+  void _calculateMaterialSubtotal(Map<String, dynamic> material) {
+    double purchasePrice = material['purchase_price'] ?? 0.0;
+    double purchaseQty = material['purchase_qty'] ?? 1.0;
+    String purchaseUnit = material['purchase_unit'] ?? 'gram';
+    double usageQty = material['usage_qty'] ?? 0.0;
+    String usageUnit = material['usage_unit'] ?? 'gram';
+
+    // Base everything to 'gram' or 'ml' or 'pcs'
+    double normalizedPurchaseQty = _normalizeQty(purchaseQty, purchaseUnit);
+    double normalizedUsageQty = _normalizeQty(usageQty, usageUnit);
+
+    if (normalizedPurchaseQty > 0) {
+      material['subtotal'] = (normalizedUsageQty / normalizedPurchaseQty) * purchasePrice;
+    } else {
+      material['subtotal'] = 0.0;
+    }
+  }
+
+  double _normalizeQty(double qty, String unit) {
+    switch (unit.toLowerCase()) {
+      case 'kg':
+      case 'l':
+        return qty * 1000;
+      case 'ons':
+        return qty * 100;
+      default:
+        return qty;
+    }
+  }
+
+  Future<void> _generatePdfReport() async {
+    final pdf = pw.Document();
+    final String productName = _recipeNameController.text.isEmpty ? "Produk Tanpa Nama" : _recipeNameController.text;
+    final String dateStr = DateFormat('dd MMMM yyyy').format(DateTime.now());
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('Laporan Kalkulasi HPP', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(dateStr),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text('Informasi Produk', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Nama Produk:'),
+                pw.Text(productName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Jumlah Produksi:'),
+                pw.Text('${_batchSize.toStringAsFixed(0)} pcs'),
+              ],
+            ),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Waktu Produksi:'),
+                pw.Text('${_productionTimeHours.toStringAsFixed(1)} jam'),
+              ],
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text('Rincian Biaya Bahan Baku', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.TableHelper.fromTextArray(
+              headers: ['Nama Bahan', 'Pemakaian', 'Subtotal'],
+              data: _rawMaterials.map((m) => [
+                m['name'],
+                '${m['usage_qty']} ${m['usage_unit']}',
+                'Rp ${((m['subtotal'] ?? 0) as double).toStringAsFixed(0)}'
+              ]).toList(),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text('Rincian Biaya Tenaga Kerja', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.TableHelper.fromTextArray(
+              headers: ['Posisi', 'Orang', 'Upah/Jam', 'Subtotal'],
+              data: _laborDetails.map((l) => [
+                l['name'],
+                '${l['count']}',
+                'Rp ${l['wage_per_hour']}',
+                'Rp ${((l['subtotal'] ?? 0) as double).toStringAsFixed(0)}'
+              ]).toList(),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text('Ringkasan HPP', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Subtotal HPP (Bahan + Tenaga Kerja + Overhead):'),
+                pw.Text('Rp ${_subtotalHpp.toStringAsFixed(0)}'),
+              ],
+            ),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Safety Margin (5%):'),
+                pw.Text('Rp ${_safetyMargin.toStringAsFixed(0)}'),
+              ],
+            ),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('TOTAL HPP (1 BATCH):', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                pw.Text('Rp ${_totalHpp.toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+            pw.Divider(),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(10),
+              color: PdfColors.grey200,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('HPP PER UNIT:', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Rp ${_hppPerUnit.toStringAsFixed(0)}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text('Simulasi Harga Jual', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Margin Keuntungan:'),
+                pw.Text('${_marginPercentage.toStringAsFixed(0)}%'),
+              ],
+            ),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Rekomendasi Harga Jual:', style: const pw.TextStyle(color: PdfColors.green)),
+                pw.Text('Rp ${_recommendedPrice.toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.green)),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Laporan_HPP_${productName.replaceAll(' ', '_')}.pdf',
+    );
   }
 
   void _addLabor() {
@@ -385,12 +649,12 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
 
   Widget _buildMenuGrid(BuildContext context) {
     final List<Map<String, dynamic>> menus = [
-      {'title': 'Riwayat Perhitungan', 'icon': Icons.history, 'color': Colors.blue},
-      {'title': 'Daftar Bahan Baku', 'icon': Icons.inventory_2, 'color': Colors.orange},
-      {'title': 'Tarif Listrik', 'icon': Icons.electric_bolt, 'color': Colors.yellow.shade800},
-      {'title': 'Tarif Sewa', 'icon': Icons.home, 'color': Colors.purple},
-      {'title': 'Tarif Air', 'icon': Icons.water_drop, 'color': Colors.cyan},
-      {'title': 'Tarif Wifi', 'icon': Icons.wifi, 'color': Colors.green},
+      {'title': 'Riwayat Perhitungan', 'icon': Icons.history, 'color': Colors.blue, 'route': '/history'},
+      {'title': 'Daftar Bahan Baku', 'icon': Icons.inventory_2, 'color': Colors.orange, 'route': '/raw-materials'},
+      {'title': 'Tarif Listrik', 'icon': Icons.electric_bolt, 'color': Colors.yellow.shade800, 'route': '/utility-rates'},
+      {'title': 'Tarif Sewa', 'icon': Icons.home, 'color': Colors.purple, 'route': '/utility-rates'},
+      {'title': 'Tarif Air', 'icon': Icons.water_drop, 'color': Colors.cyan, 'route': '/utility-rates'},
+      {'title': 'Tarif Wifi', 'icon': Icons.wifi, 'color': Colors.green, 'route': '/utility-rates'},
     ];
 
     return GridView.builder(
@@ -407,9 +671,13 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
         final menu = menus[index];
         return InkWell(
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Fitur ${menu['title']} akan segera hadir!')),
-            );
+            if (menu['route'] != null) {
+              Navigator.pushNamed(context, menu['route']);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Fitur ${menu['title']} akan segera hadir!')),
+              );
+            }
           },
           borderRadius: BorderRadius.circular(16),
           child: Container(
@@ -515,9 +783,7 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
                 onPressed: () {
                   if (_currentStep < 4) {
                     setState(() {
-                      if (_currentStep == 3) {
-                        _calculateFullCosting();
-                      }
+                      _calculateFullCosting();
                       _currentStep++;
                     });
                   } else {
@@ -575,50 +841,6 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
           hint: 'Contoh: Americano, Kopi Susu Gula Aren',
           controller: _recipeNameController,
           icon: Icons.inventory_2,
-        ),
-        const SizedBox(height: 16),
-
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Jumlah Produksi',
-                hint: '50',
-                controller: _batchSizeController,
-                icon: Icons.shopping_basket,
-                suffix: 'pcs / batch',
-                keyboardType: TextInputType.number,
-                onChanged: (val) {
-                  setState(() {
-                    _batchSize = double.tryParse(val) ?? 1;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildTextField(
-                label: 'Waktu Produksi',
-                hint: '2',
-                controller: _productionTimeController,
-                icon: Icons.timer,
-                suffix: 'jam / batch',
-                keyboardType: TextInputType.number,
-                onChanged: (val) {
-                  setState(() {
-                    _productionTimeHours = double.tryParse(val) ?? 1;
-                    for (var labor in _laborDetails) {
-                      labor['subtotal'] = labor['wage_per_hour'] * labor['count'] * _productionTimeHours;
-                    }
-                    for (var eq in _equipmentDetails) {
-                      eq['usage_hours'] = _productionTimeHours;
-                      eq['subtotal'] = (eq['power_watts'] / 1000.0) * eq['usage_hours'] * _electricityRate;
-                    }
-                  });
-                },
-              ),
-            ),
-          ],
         ),
       ],
     );
@@ -688,54 +910,53 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
                           Expanded(
                             flex: 3,
-                            child: _buildSmallTextField(
-                              label: 'Nama Bahan',
-                              hint: 'Biji Kopi',
-                              initialValue: material['name'],
-                              onChanged: (val) => material['name'] = val,
+                            child: Text(
+                              material['name'] ?? '',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ),
-                          const SizedBox(width: 8),
                           IconButton(
                             onPressed: () => _removeRawMaterial(index),
-                            icon: const Icon(Icons.delete, color: Colors.red),
+                            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
                           ),
                         ],
+                      ),
+                      const Divider(),
+                      const Text(
+                        'Informasi Pembelian:',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Harga: Rp ${material['purchase_price']} / ${material['purchase_qty']} ${material['purchase_unit']}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      if (material['purchase_note']?.isNotEmpty == true)
+                        Text('Note: ${material['purchase_note']}', style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic)),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Pemakaian Bahan:',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
                             child: _buildSmallTextField(
-                              label: 'Jumlah',
-                              hint: '1',
-                              initialValue: material['qty'].toString(),
+                              label: 'Jumlah Pakai',
+                              hint: '10',
+                              initialValue: material['usage_qty'].toString(),
                               keyboardType: TextInputType.number,
                               onChanged: (val) {
                                 setState(() {
-                                  material['qty'] = double.tryParse(val) ?? 0;
-                                  material['subtotal'] = material['qty'] * material['price'];
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildSmallTextField(
-                              label: 'Harga Satuan',
-                              hint: '15000',
-                              initialValue: material['price'].toString(),
-                              keyboardType: TextInputType.number,
-                              prefix: 'Rp',
-                              onChanged: (val) {
-                                setState(() {
-                                  material['price'] = double.tryParse(val) ?? 0;
-                                  material['subtotal'] = material['qty'] * material['price'];
+                                  material['usage_qty'] = double.tryParse(val) ?? 0;
+                                  _calculateMaterialSubtotal(material);
                                 });
                               },
                             ),
@@ -743,17 +964,58 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Subtotal', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                                Text(
-                                  'Rp ${(material['subtotal'] ?? 0).toStringAsFixed(0)}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                const Text('Satuan', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                DropdownButtonFormField<String>(
+                                  initialValue: material['usage_unit'],
+                                  isDense: true,
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  items: ['Kg', 'ml', 'gram', 'pcs', 'ons', 'L']
+                                      .map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 10))))
+                                      .toList(),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      material['usage_unit'] = val!;
+                                      _calculateMaterialSubtotal(material);
+                                    });
+                                  },
                                 ),
                               ],
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildSmallTextField(
+                              label: 'Keterangan',
+                              hint: 'Opsional',
+                              initialValue: material['usage_note'],
+                              onChanged: (val) => material['usage_note'] = val,
+                            ),
+                          ),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            const Text('Biaya Pemakaian', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            Text(
+                              'Rp ${(material['subtotal'] ?? 0).toStringAsFixed(0)}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -969,6 +1231,54 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Konfigurasi Produksi',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                label: 'Jumlah Produksi',
+                hint: '50',
+                controller: _batchSizeController,
+                icon: Icons.shopping_basket,
+                suffix: 'pcs',
+                keyboardType: TextInputType.number,
+                onChanged: (val) {
+                  setState(() {
+                    _batchSize = double.tryParse(val) ?? 1;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildTextField(
+                label: 'Waktu Produksi',
+                hint: '2',
+                controller: _productionTimeController,
+                icon: Icons.timer,
+                suffix: 'jam',
+                keyboardType: TextInputType.number,
+                onChanged: (val) {
+                  setState(() {
+                    _productionTimeHours = double.tryParse(val) ?? 1;
+                    for (var labor in _laborDetails) {
+                      labor['subtotal'] = labor['wage_per_hour'] * labor['count'] * _productionTimeHours;
+                    }
+                    for (var eq in _equipmentDetails) {
+                      eq['usage_hours'] = _productionTimeHours;
+                      eq['subtotal'] = (eq['power_watts'] / 1000.0) * eq['usage_hours'] * _electricityRate;
+                    }
+                  });
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 32),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -1313,19 +1623,36 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
 
         const SizedBox(height: 24),
 
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _saveAsMenu,
-            icon: const Icon(Icons.restaurant_menu),
-            label: const Text('Simpan Ke Daftar Menu'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.secondary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _saveAsMenu,
+                icon: const Icon(Icons.restaurant_menu),
+                label: const Text('Simpan Menu'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _generatePdfReport,
+                icon: const Icon(Icons.download),
+                label: const Text('Unduh PDF'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+          ],
         ),
 
         const SizedBox(height: 32),
@@ -1469,6 +1796,7 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
     required TextEditingController controller,
     required IconData icon,
     String? suffix,
+    String? prefixText,
     TextInputType? keyboardType,
     Function(String)? onChanged,
   }) {
@@ -1490,6 +1818,7 @@ class _HppCalculatorScreenState extends State<HppCalculatorScreen> {
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: Icon(icon, size: 20),
+            prefixText: prefixText,
             suffixText: suffix,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),

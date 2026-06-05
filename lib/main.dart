@@ -14,6 +14,9 @@ import 'screens/register_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/store_selection_screen.dart';
 import 'screens/menu_list_screen.dart';
+import 'screens/history_screen.dart';
+import 'screens/raw_material_list_screen.dart';
+import 'screens/utility_rates_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -125,6 +128,9 @@ class ProProfitApp extends StatelessWidget {
         '/main': (context) => const MainScreen(),
         '/store-selection': (context) => const StoreSelectionScreen(),
         '/menu-list': (context) => const MenuListScreen(),
+        '/history': (context) => const HistoryScreen(),
+        '/raw-materials': (context) => const RawMaterialListScreen(),
+        '/utility-rates': (context) => const UtilityRatesScreen(),
       },
     );
   }
